@@ -6,38 +6,33 @@ use nom::{
     IResult,
 };
 
-type Pair = (i64, i64);
+type Pair<T> = (T, T);
 
 fn parse_int(input: &str) -> IResult<&str, i64> {
     map_res(digit1, |s: &str| s.parse::<i64>())(input)
 }
 
-fn parse_pair(input: &str) -> IResult<&str, Pair> {
+fn parse_pair(input: &str) -> IResult<&str, Pair<i64>> {
     let (input, (left, right)) = separated_pair(parse_int, space1, parse_int)(input)?;
     Ok((input, (left, right)))
 }
 
-fn parse_file(input: &str) -> IResult<&str, Vec<Pair>> {
-    separated_list0(line_ending, parse_pair)(input)
+fn parse_file(input: &str) -> IResult<&str, Pair<Vec<i64>>> {
+    let (input, pairs) = separated_list0(line_ending, parse_pair)(input)?;
+    Ok((input, pairs.into_iter().unzip()))
 }
 
 fn main() {
     let file_content = std::fs::read_to_string("src/input.txt").expect("Failed to read file");
 
     match parse_file(&file_content) {
-        Ok((_, pairs)) => {
-            let mut left_list: Vec<i64> = vec![];
-            let mut right_list: Vec<i64> = vec![];
-            for (left, right) in pairs {
-                left_list.push(left);
-                right_list.push(right);
-            }
-            left_list.sort_unstable();
-            right_list.sort_unstable();
+        Ok((_, (mut left, mut right))) => {
+            left.sort_unstable();
+            right.sort_unstable();
 
-            let result = left_list
+            let result = left
                 .iter()
-                .zip(right_list.iter())
+                .zip(right.iter())
                 .fold(0, |acc, (l, r)| acc + (l - r).abs());
             println!("{}", result)
         }
