@@ -10,6 +10,16 @@ use std::io::{self, BufRead};
 type Level = i8;
 struct Report(Vec<Level>);
 
+impl FromIterator<Level> for Report {
+    fn from_iter<I: IntoIterator<Item = Level>>(iter: I) -> Self {
+        let mut v = Vec::new();
+        for i in iter {
+            v.push(i);
+        }
+        Report(v)
+    }
+}
+
 impl Report {
     fn is_safe(&self) -> bool {
         let levels = &self.0;
@@ -30,6 +40,23 @@ impl Report {
             is_valid && diff <= 3 && diff > 0
         })
     }
+
+    fn is_safe_with_dampener(&self) -> bool {
+        let levels = &self.0;
+
+        for idx in 0..levels.len() {
+            let report: Report = levels
+                .iter()
+                .enumerate()
+                .filter(|&(i, _)| idx != i)
+                .map(|(_, &v)| v)
+                .collect();
+            if report.is_safe() {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 fn parse_report(input: &str) -> IResult<&str, Report> {
@@ -40,18 +67,23 @@ fn main() -> io::Result<()> {
     let file = File::open("src/input.txt")?;
     let reader = io::BufReader::new(file);
 
-    let mut count = 0;
+    let mut part_a_safe_count = 0;
+    let mut part_b_safe_count = 0;
 
     for line in reader.lines() {
         let line = line?;
         if let Ok((_, report)) = parse_report(&line) {
             if report.is_safe() {
-                count += 1;
+                part_a_safe_count += 1;
+                part_b_safe_count += 1;
+            } else if report.is_safe_with_dampener() {
+                part_b_safe_count += 1;
             }
         }
     }
 
-    println!("Number of valid reports: {}", count);
+    println!("Part a: {}", part_a_safe_count);
+    println!("Part b: {}", part_b_safe_count);
     Ok(())
 }
 
