@@ -5,6 +5,7 @@ use nom::{
     sequence::separated_pair,
     IResult,
 };
+use std::collections::HashMap;
 
 type Pair<T> = (T, T);
 
@@ -30,11 +31,22 @@ fn main() {
             left.sort_unstable();
             right.sort_unstable();
 
-            let result = left
+            let part_a_result = left
                 .iter()
                 .zip(right.iter())
                 .fold(0, |acc, (l, r)| acc + (l - r).abs());
-            println!("{}", result)
+            println!("Part a: {}", part_a_result);
+
+            let left_map = left.iter().fold(HashMap::new(), |mut counts, num| {
+                *counts.entry(num).or_insert(0) += 1;
+                counts
+            });
+
+            let part_b_result = right
+                .iter()
+                .fold(0, |acc, r| acc + (r * left_map.get(&r).unwrap_or(&0)));
+
+            println!("Part b: {}", part_b_result);
         }
         Err(e) => {
             eprintln!("Failed to parse file: {:?}", e);
