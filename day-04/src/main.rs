@@ -1,11 +1,41 @@
-#[derive(Debug)]
 struct Puzzle {
     grid: Vec<Vec<char>>,
-    hbound: i64,
-    vbound: i64,
+    hbound: i32,
+    vbound: i32,
 }
 
-type Position = (usize, usize);
+#[derive(Clone, Copy)]
+struct Position {
+    x: i32,
+    y: i32,
+}
+
+impl std::ops::Add for Position {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
+    }
+}
+
+impl Position {
+    fn step(self, direction: &SearchDirection) -> Self {
+        let delta = match direction {
+            SearchDirection::North => Position { x: 0, y: -1 },
+            SearchDirection::NorthEast => Position { x: 1, y: -1 },
+            SearchDirection::East => Position { x: 1, y: 0 },
+            SearchDirection::SouthEast => Position { x: 1, y: 1 },
+            SearchDirection::South => Position { x: 0, y: 1 },
+            SearchDirection::SouthWest => Position { x: -1, y: 1 },
+            SearchDirection::West => Position { x: -1, y: 0 },
+            SearchDirection::NorthWest => Position { x: -1, y: -1 },
+        };
+        self + delta
+    }
+}
 
 #[derive(Clone, Debug)]
 enum SearchDirection {
@@ -24,21 +54,6 @@ struct BrokenDownWord {
     part_length: usize,
 }
 
-impl SearchDirection {
-    fn step(&self, (x, y): Position) -> Position {
-        match self {
-            Self::North => (x, y - 1),
-            Self::NorthEast => (x + 1, y - 1),
-            Self::East => (x + 1, y),
-            Self::SouthEast => (x + 1, y + 1),
-            Self::South => (x, y + 1),
-            Self::SouthWest => (x - 1, y + 1),
-            Self::West => (x - 1, y),
-            Self::NorthWest => (x - 1, y - 1),
-        }
-    }
-}
-
 impl Puzzle {
     fn load(s: &str) -> Result<Self, &'static str> {
         let lines: Vec<Vec<char>> = s
@@ -50,8 +65,8 @@ impl Puzzle {
             return Err("Puzzle cannot be empty");
         }
         let expected_len = lines[0].len();
-        let hbound: i64 = (expected_len - 1).try_into().unwrap();
-        let vbound: i64 = (lines.len() - 1).try_into().unwrap();
+        let hbound: i32 = (expected_len - 1) as i32;
+        let vbound: i32 = (lines.len() - 1) as i32;
         if lines.iter().all(|row| row.len() == expected_len) {
             Ok(Puzzle {
                 grid: lines,
@@ -63,8 +78,8 @@ impl Puzzle {
         }
     }
 
-    fn get(&self, (x, y): Position) -> char {
-        self.grid[y][x]
+    fn get(&self, position: Position) -> char {
+        self.grid[position.y as usize][position.x as usize]
     }
 
     fn search_position(&self, word: &str, position: Position, direction: &SearchDirection) -> bool {
@@ -73,7 +88,7 @@ impl Puzzle {
             .try_fold(position, |pos, (i, char)| {
                 if self.get(pos) == char {
                     if i < word.len() - 1 {
-                        Some(direction.step(pos))
+                        Some(pos.step(direction))
                     } else {
                         Some(pos)
                     }
@@ -87,11 +102,11 @@ impl Puzzle {
     fn is_valid_direction(
         &self,
         word: &str,
-        (x, y): Position,
+        position: Position,
         direction: &SearchDirection,
     ) -> bool {
-        let len = (word.len() - 1) as i64;
-        let (x, y) = (x as i64, y as i64);
+        let len = (word.len() - 1) as i32;
+        let (x, y) = (position.x, position.y);
         match direction {
             SearchDirection::North => y - len >= 0,
             SearchDirection::NorthEast => (x + len <= self.hbound) && (y - len >= 0),
@@ -123,8 +138,26 @@ impl Puzzle {
                 row.iter().enumerate().flat_map(move |(x, _)| {
                     DIRECTIONS
                         .iter()
-                        .filter(move |&dir| self.is_valid_direction(word, (x, y), dir))
-                        .filter(move |&dir| self.search_position(word, (x, y), dir))
+                        .filter(move |&dir| {
+                            self.is_valid_direction(
+                                word,
+                                Position {
+                                    x: (x as i32),
+                                    y: (y as i32),
+                                },
+                                dir,
+                            )
+                        })
+                        .filter(move |&dir| {
+                            self.search_position(
+                                word,
+                                Position {
+                                    x: (x as i32),
+                                    y: (y as i32),
+                                },
+                                dir,
+                            )
+                        })
                 })
             })
             .count() as i32
@@ -132,16 +165,41 @@ impl Puzzle {
 
     fn xsearch(&self, word: &str) -> i32 {
         let broken_word = break_down_word(word).expect("Word should of odd length, > 0");
-        let part_len = broken_word.part_length;
+        let part_len = broken_word.part_length as i32;
         let mut count = 0;
-        for x in part_len..self.hbound as usize - part_len + 1 {
-            for y in part_len..self.vbound as usize - part_len + 1 {
-                if self.get((x, y)) == broken_word.fulcrum {
+        for x in part_len..self.hbound - part_len + 1 {
+            for y in part_len..self.vbound - part_len + 1 {
+                let pos = Position { x, y };
+                if self.get(pos) == broken_word.fulcrum {
                     let positions = [
-                        ((x - part_len, y - part_len), SearchDirection::SouthEast),
-                        ((x + part_len, y - part_len), SearchDirection::SouthWest),
-                        ((x - part_len, y + part_len), SearchDirection::NorthEast),
-                        ((x + part_len, y + part_len), SearchDirection::NorthWest),
+                        (
+                            (pos + Position {
+                                x: -part_len,
+                                y: -part_len,
+                            }),
+                            SearchDirection::SouthEast,
+                        ),
+                        (
+                            (pos + Position {
+                                x: part_len,
+                                y: -part_len,
+                            }),
+                            SearchDirection::SouthWest,
+                        ),
+                        (
+                            (pos + Position {
+                                x: -part_len,
+                                y: part_len,
+                            }),
+                            SearchDirection::NorthEast,
+                        ),
+                        (
+                            (pos + Position {
+                                x: part_len,
+                                y: part_len,
+                            }),
+                            SearchDirection::NorthWest,
+                        ),
                     ];
 
                     let validcount = positions
